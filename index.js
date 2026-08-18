@@ -1,43 +1,50 @@
 const express = require('express');
-const cors = require('cors');
-const fetch = require('node-fetch');
+const path = require('path');
 
 const app = express();
-app.use(cors());
+const PORT = process.env.PORT || 3000;
+
+// Votre clé API Gemini
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Remplacez les guillemets par votre clé API Google Gemini
-const GEMINI_API_KEY = "VOTRE_CLE_API_GEMINI_ICI";
-
+// Endpoint API pour traiter les messages
 app.post('/api/chat', async (req, res) => {
-    const { message } = req.body;
+    const { prompt } = req.body;
 
-    if (!message) {
-        return res.status(400).json({ status: 'error', message: 'Message vide.' });
+    if (!prompt) {
+        return res.status(400).json({ error: 'Message vide.' });
     }
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: "Tu es Unova Assistance, l'IA officielle de Unova Social. Sois amicale, dynamique et concise.\n\nUser: " + message }]
-                }]
+                contents: [{ parts: [{ text: prompt }] }]
             })
         });
 
         const data = await response.json();
 
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
-            res.json({ status: 'success', reply: data.candidates[0].content.parts[0].text });
+        if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
+            res.json({ reply: data.candidates[0].content.parts[0].text });
+        } else if (data.error) {
+            res.status(500).json({ error: data.error.message });
         } else {
-            res.status(500).json({ status: 'error', message: 'Erreur de réponse API Google.' });
+            res.status(500).json({ error: 'Réponse invalide de Gemini.' });
         }
     } catch (err) {
-        res.status(500).json({ status: 'error', message: 'Erreur serveur IA.' });
+        res.status(500).json({ error: 'Erreur réseau vers Gemini : ' + err.message });
     }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Serveur Unova lancé sur le port ${PORT}`));
+// Servir l'interface utilisateur
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, () => {
+    console.log(`Serveur IA démarré sur le port ${PORT}`);
+});
